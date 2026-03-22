@@ -56,12 +56,13 @@ class MessageRecord(BaseModel):
     message_id: int
     message_text: str
     timestamp: str
+    file_id: Union[str, None] = None
+    media_type: Union[str, None] = "text"
 
 
 class Messagesx:
     storage_name = "messages"
     PATH_DATABASE = "messages.db"
-
 
     @staticmethod
     def create_db():
@@ -72,18 +73,23 @@ class Messagesx:
                                user_id INTEGER,
                                message_id INTEGER,
                                message_text TEXT,
-                               timestamp TEXT)''')
-
+                               timestamp TEXT,
+                               file_id TEXT,
+                               media_type TEXT)''')
+            try:
+                cursor.execute("ALTER TABLE messages ADD COLUMN file_id TEXT")
+                cursor.execute("ALTER TABLE messages ADD COLUMN media_type TEXT")
+            except sqlite3.OperationalError:
+                pass
 
     @staticmethod
-    def add(user_id: int, message_id: int, message_text: str, timestamp: str):
+    def add(user_id: int, message_id: int, message_text: str, timestamp: str, file_id: str = None, media_type: str = "text"):
         with sqlite3.connect(Messagesx.PATH_DATABASE) as con:
             con.row_factory = dict_factory
             con.execute(
-                f"INSERT INTO {Messagesx.storage_name} (user_id, message_id, message_text, timestamp) VALUES (?, ?, ?, ?)",
-                [user_id, message_id, message_text, timestamp],
+                f"INSERT INTO {Messagesx.storage_name} (user_id, message_id, message_text, timestamp, file_id, media_type) VALUES (?, ?, ?, ?, ?, ?)",
+                [user_id, message_id, message_text, timestamp, file_id, media_type],
             )
-
 
     @staticmethod
     def get(user_id: int, message_id: int) -> Union[MessageRecord, None]:
@@ -95,7 +101,6 @@ class Messagesx:
                 response = MessageRecord(**response)
             return response
 
-
     @staticmethod
     def update(user_id: int, message_id: int, **kwargs):
         with sqlite3.connect(Messagesx.PATH_DATABASE) as con:
@@ -105,14 +110,12 @@ class Messagesx:
             parameters.extend([user_id, message_id])
             con.execute(sql + " WHERE user_id = ? AND message_id = ?", parameters)
 
-
     @staticmethod
     def delete(user_id: int, message_id: int):
         with sqlite3.connect(Messagesx.PATH_DATABASE) as con:
             con.row_factory = dict_factory
             sql = f"DELETE FROM {Messagesx.storage_name} WHERE user_id = ? AND message_id = ?"
             con.execute(sql, [user_id, message_id])
-
 
     @staticmethod
     def delete_old_messages(cutoff_timestamp: str):
@@ -125,14 +128,12 @@ class UsersDB:
     storage_name = "users"
     PATH_DATABASE = "users.db"
 
-
     @staticmethod
     def create_db():
         with sqlite3.connect(UsersDB.PATH_DATABASE) as conn:
             cursor = conn.cursor()
             cursor.execute('''CREATE TABLE IF NOT EXISTS users
                               (user_id INTEGER PRIMARY KEY, user_fullname TEXT)''')
-
 
     @staticmethod
     def add(user_id: int, user_fullname: str):
@@ -142,7 +143,6 @@ class UsersDB:
                 f"INSERT INTO {UsersDB.storage_name} (user_id, user_fullname) VALUES (?, ?)",
                 [user_id, user_fullname],
             )
-
 
     @staticmethod
     def get(user_id: int) -> Union[dict, None]:
@@ -154,7 +154,6 @@ class UsersDB:
 
 
 Messagesx.create_db()
-
 UsersDB.create_db()
 
 
@@ -169,15 +168,6 @@ async def cleanup_old_messages():
         Messagesx.delete_old_messages(cutoff_timestamp_iso)
 
 
-async def send_msg(message_old: str, message_new: Union[str, None], user_fullname: str, user_id: int, timestamp: str, bot: Bot = None):
-    user_fullname_escaped = escape(user_fullname)
-    if message_new is None:
-        msg = DELETED_MESSAGE_FORMAT.format(user_fullname_escaped=user_fullname_escaped, user_id=user_id, timestamp=timestamp, old_text=message_old)
-    else:
-        msg = EDITED_MESSAGE_FORMAT.format(user_fullname_escaped=user_fullname_escaped, user_id=user_id, timestamp=timestamp, old_text=message_old, new_text=message_new)
-    await bot.send_message(USER_ID, msg, parse_mode='html')
-
-
 @router.message(Command(commands=["start"]))
 async def start_command(message: types.Message):
     user_id = message.from_user.id
@@ -186,55 +176,58 @@ async def start_command(message: types.Message):
     await message.answer(msg, parse_mode='html')
 
 
-@router.edited_business_message()
-async def edited_business_message(message: types.Message):
-    if message.from_user.id == message.chat.id:
-        user_msg = Messagesx.get(user_id=message.from_user.id, message_id=message.message_id)
-        if user_msg:
-            message_timestamp = datetime.fromisoformat(user_msg.timestamp).astimezone(timezone_local)
-            timestamp_formatted = message_timestamp.strftime('%d/%m/%y %H:%M')
-            await send_msg(message_old=user_msg.message_text, message_new=message.text, user_fullname=message.from_user.full_name, user_id=message.chat.id, timestamp=timestamp_formatted, bot=message.bot)
-            Messagesx.update(user_id=message.from_user.id, message_id=message.message_id, message_text=message.text)
-
-
-@router.deleted_business_messages()
-async def deleted_business_messages(message: types.Message):
-    user_id = message.chat.id
-    user_fullname = message.chat.full_name
-    for msg_id in message.message_ids:
-        user_msg = Messagesx.get(user_id=user_id, message_id=msg_id)
-        if user_msg:
-            message_timestamp = datetime.fromisoformat(user_msg.timestamp).astimezone(timezone_local)
-            timestamp_formatted = message_timestamp.strftime('%d/%m/%y %H:%M')
-            await send_msg(message_old=user_msg.message_text, message_new=None, user_fullname=user_fullname, user_id=user_id, timestamp=timestamp_formatted, bot=message.bot)
-            Messagesx.delete(user_id=user_id, message_id=msg_id)
-
-
-@router.business_message(F.text)
-async def business_message(message: types.Message):
-    if message.from_user.id == message.chat.id:
-        user_id = message.from_user.id
-        user_fullname = message.from_user.full_name
-        user_fullname_escaped = escape(user_fullname)
-        user_in_db = UsersDB.get(user_id=user_id)
-        if user_in_db is None:
-            UsersDB.add(user_id=user_id, user_fullname=user_fullname)
-            msg = NEW_USER_MESSAGE_FORMAT.format(user_fullname_escaped=user_fullname_escaped, user_id=user_id)
-            await message.bot.send_message(USER_ID, msg, parse_mode='html')
-        message_datetime_utc = message.date.replace(tzinfo=timezone.utc)
-        message_datetime_local = message_datetime_utc.astimezone(timezone_local)
-        timestamp_formatted = message_datetime_local.strftime('%d/%m/%y %H:%M')
-        timestamp_iso = message_datetime_utc.isoformat()
-        Messagesx.add(user_id=user_id, message_id=message.message_id, message_text=message.text, timestamp=timestamp_iso)
-
-
 async def main() -> None:
+    from tdlib_userbot import init_userbot
+
+    # ── TDLib userbot credentials from config ──
+    tdlib_cfg = config["tdlib"]
+    api_id      = int(tdlib_cfg["api_id"].strip('"'))
+    api_hash    = tdlib_cfg["api_hash"].strip('"')
+    phone       = tdlib_cfg["phone"].strip('"')
+    password    = tdlib_cfg.get("password", "").strip('"')
+    tdjson_path = tdlib_cfg["tdjson_path"].strip('"')
+
+    # ── Init and start userbot ──
+    userbot = init_userbot(
+        api_id=api_id,
+        api_hash=api_hash,
+        phone_number=phone,
+        password=password,
+        tdjson_path=tdjson_path,
+    )
+    await userbot.start()
+
+    # ── Register message-tracking handlers ──
+    userbot.register_message_tracking_handlers(
+        aiogram_bot=Bot(token=TOKEN),
+        notify_user_id=USER_ID,
+        timezone_local=timezone_local,
+        edited_fmt=EDITED_MESSAGE_FORMAT,
+        deleted_fmt=DELETED_MESSAGE_FORMAT,
+        new_user_fmt=NEW_USER_MESSAGE_FORMAT,
+        messagesx_cls=Messagesx,
+        usersdb_cls=UsersDB,
+    )
+
     bot = Bot(token=TOKEN)
     dp = Dispatcher()
     dp.include_router(router)
     await bot.delete_webhook(drop_pending_updates=True)
-    await dp.start_polling(bot)
+
+    # ── Run aiogram polling + TDLib idle concurrently ──
+    cleanup_task = asyncio.create_task(cleanup_old_messages())
+    try:
+        await asyncio.gather(
+            dp.start_polling(bot),
+            userbot.client.idle(),
+        )
+    finally:
+        cleanup_task.cancel()
+        await userbot.stop()
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("Stopped by user")

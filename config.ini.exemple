@@ -1,0 +1,16 @@
+[telegram]
+token = ""
+user_id = ""
+
+[timezone]
+name = "Europe/Moscow"
+
+[settings]
+language = "ru"
+
+[tdlib]
+api_id     = ""
+api_hash   = ""
+phone      = "+7**********"
+password   = ""
+tdjson_path = "tdjson.dll"

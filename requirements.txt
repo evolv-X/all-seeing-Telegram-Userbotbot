@@ -1,3 +1,4 @@
 pydantic
 aiogram
 pytz
+aiotdlib

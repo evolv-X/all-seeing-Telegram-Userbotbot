@@ -1,138 +1,196 @@
-# all-seeing Telegram bot
+# all-seeing Telegram Bot
 
-The all-seeing Telegram bot operates in business mode, making it a powerful tool for Telegram Premium users. It allows the retrieval of the content of messages that other users have edited or deleted in private chats with the bot's owner. The bot retrieves the original content from its database and notifies the owner. Additionally, it identifies new users who message the owner and sends their Telegram ID.
+A Telegram userbot that monitors your private chats and notifies you about **edited** and **deleted** messages — including media. Built on [TDLib](https://core.telegram.org/tdlib) via [aiotdlib](https://github.com/pylakey/aiotdlib), running as a regular user account with no Business subscription required.
 
----
-
-## 🌟 Features
-
-- **Track Edited Messages**
-- **Track Deleted Messages**
-- **Detect New Users**
-- **Multilingual Support**
+> Fork of [Pfauberg/all-seeing-Telegram-bot](https://github.com/Pfauberg/all-seeing-Telegram-bot) — rewritten to use TDLib instead of the Telegram Business Bot API.
 
 ---
 
-## ⚙️ Setup Instructions
+## ✨ Features
 
-### 🛠️ Step 1: Create a Telegram Bot and Enable Business Mode
-
-1. Open Telegram and start a chat with [@BotFather](https://t.me/botfather):
-
-   - Send `/start` and `/newbot`.
-     - Enter the bot's name.
-     - Set a unique username.
-   - Copy the token provided by @BotFather.
-
-2. Enable business mode:
-
-   - Send `/mybots` to @BotFather and select your bot.
-   - Go to **Bot Settings** → **Business Mode** → **Turn on**.
-
-3. Add the bot to Telegram Business:
-
-   - Navigate to **Telegram Settings** → **Telegram Business** → **Chatbots**.
-   - Enter the bot's username.
+| Feature | Description |
+|---|---|
+| 🔍 **Edited messages** | Catches any edit in your private chats and shows you the original text |
+| 🗑️ **Deleted messages** | Saves a copy before deletion — text and media |
+| 🖼️ **Full media support** | Photo, video, voice, video note, animation, sticker, document, audio |
+| 🔥 **Self-destruct messages** | Immediately downloads and forwards timer-deleted / view-once media |
+| 👤 **New user detection** | Notifies you when a new person messages you for the first time |
+| 🌍 **Multilingual** | English and Russian built-in; easy to add more |
+| 🚫 **No Business required** | Works on any Telegram account, no Premium/Business subscription needed |
 
 ---
 
-### 🔍 Step 2: Get Your Telegram User ID
+## 🏗️ How It Works
 
-1. Start a chat with [@pfauberg\_bot](https://t.me/pfauberg_bot) [Temporarily unavailable].
-2. Send `/start` to the bot.
-3. The bot will respond with your Telegram user ID. Copy this ID.
+```
+Your Telegram account (TDLib userbot)
+        │
+        │  updateNewMessage       → saves message + media to SQLite
+        │  updateMessageEdited    → fetches new content, sends diff to you
+        │  updateDeleteMessages   → retrieves saved copy, sends it to you
+        ▼
+  Notification Bot (aiogram)  →  your Telegram account
+```
+
+- **TDLib userbot** (`tdlib_userbot.py`) connects as *your* account and listens to all private chat events in real-time.
+- **Notification bot** (`main.py`, aiogram) sends formatted alerts to your Telegram user ID.
+- **SQLite** stores message history for 30 days (auto-cleaned at midnight).
+- Both run concurrently in a single process via `asyncio.gather`.
 
 ---
 
-### 🔧 Step 3: Configure the Bot
+## ⚙️ Setup
 
-1. Rename the `config_example.ini` file to `config.ini` in the root directory.
-2. Replace the placeholder values with your own:
+### Step 1 — Create a notification bot
+
+1. Open [@BotFather](https://t.me/botfather) → `/newbot`
+2. Copy the **token**
+
+### Step 2 — Get your Telegram API credentials
+
+1. Go to [my.telegram.org](https://my.telegram.org) → **API development tools**
+2. Create an app → copy **App api_id** and **App api_hash**
+
+### Step 3 — Get TDLib for your platform
+
+**Windows:**
+Download `tdjson.dll` from a prebuilt binary or build from source.
+Place it anywhere and note the full path.
+
+**macOS (Apple Silicon):**
+```bash
+brew install tdlib
+# Library will be at: /opt/homebrew/lib/libtdjson.dylib
+```
+
+**macOS (Intel):**
+```bash
+brew install tdlib
+# Library will be at: /usr/local/lib/libtdjson.dylib
+```
+
+**Linux:**
+```bash
+# Ubuntu/Debian example — or build from source
+sudo apt install libtdjson-dev
+# Library will be at: /usr/local/lib/libtdjson.so
+```
+
+### Step 4 — Configure
+
+Copy `config.ini.exemple` → `config.ini` and fill in your values:
 
 ```ini
-token - Your Bot Token here
+[telegram]
+token   = "YOUR_BOT_TOKEN"
+user_id = "YOUR_TELEGRAM_USER_ID"
 
-user_id - Your Telegram User ID here
+[timezone]
+name = "Europe/Moscow"   ; see https://en.wikipedia.org/wiki/List_of_tz_database_time_zones
 
-name - Your timezone here
+[settings]
+language = "ru"          ; ru | en
 
-language - Your language here
+[tdlib]
+api_id      = "YOUR_API_ID"
+api_hash    = "YOUR_API_HASH"
+phone       = "+7XXXXXXXXXX"
+password    = ""         ; 2FA password, leave empty if none
+tdjson_path = "/opt/homebrew/lib/libtdjson.dylib"  ; path to tdjson library
 ```
 
-#### Timezone Configuration
+> **How to find your user ID:** Send `/start` to your bot, or use [@userinfobot](https://t.me/userinfobot).
 
-1. Find your timezone [here](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones).
-2. Use the format `Region/City` (e.g., `Europe/London`) in your `config.ini` file.
+### Step 5 — Install and run
 
----
-
-### 🚀 Step 4: Install and Run
-
-1. Clone the repository to your local machine:
-
-```bash
-git clone https://github.com/Pfauberg/all-seeing-Telegram-bot
+**Windows:**
+```bat
+run.bat
 ```
 
-2. Navigate to the project directory:
-
+**macOS / Linux:**
 ```bash
-cd all-seeing-Telegram-bot
+chmod +x run.sh
+./run.sh
 ```
 
-3. Install the required dependencies:
-
+**Or manually:**
 ```bash
+python3 -m venv venv
+source venv/bin/activate          # Windows: venv\Scripts\activate
 pip install -r requirements.txt
-```
-
-4. Run the bot:
-
-```bash
 python main.py
 ```
 
----
-
-## 🌐 Language Support
-
-To add a new language:
-
-1. Use an existing file in the `languages/` directory (e.g., `en.py` or `ru.py`) as a template or create your own file.
-2. Update the `language` parameter in `config.ini` (e.g., \`language = "en").
+> **First run:** TDLib will ask for your phone number and the confirmation code from Telegram. The session is saved locally and reused on subsequent runs.
 
 ---
 
-## 📩 Examples of Bot Notifications
+## 📩 Notification Examples
 
-### New User Alert
-
-```plaintext
+**New user:**
+```
 👤 [JOHN]
-ID: 123123123
+ID: 123456789
 ```
 
-### Edited Message Notification
-
-```plaintext
-✏️ [JOHN] 123123123
-Message from 24/12/24 22:03
+**Edited message:**
+```
+✏️ [JOHN] 123456789
+Message from 23/03/25 01:15
 
 Changed from:
-"QWERTY"
+"Hello how are you"
 
 To:
-"123456"
+"Hello, how are you?"
 ```
 
-### Deleted Message Notification
-
-```plaintext
-🗑️ [JOHN] 123123123
-Message from 24/12/24 22:03
+**Deleted message:**
+```
+🗑️ [JOHN] 123456789
+Message from 23/03/25 01:15
 
 Deleted:
-"123456"
+"Meet at 9pm"
+```
+
+**Self-destructing message:**
+```
+🔥 Self-destructing message [⏱ 10s]
+👤 JOHN
+
+[photo/video attached]
 ```
 
 ---
+
+## 🌐 Adding a Language
+
+1. Copy `languages/en.py` to `languages/xx.py`
+2. Translate the format strings
+3. Set `language = "xx"` in `config.ini`
+
+---
+
+## 📁 Project Structure
+
+```
+├── main.py              # Aiogram bot + startup orchestration
+├── tdlib_userbot.py     # TDLib userbot: auth, event handlers, gift tools
+├── config.ini           # Your config (not committed)
+├── config.ini.exemple   # Config template
+├── languages/
+│   ├── en.py            # English strings
+│   └── ru.py            # Russian strings
+├── messages.db          # SQLite message history (auto-created)
+├── users.db             # SQLite user registry (auto-created)
+├── run.bat              # Windows launcher
+└── run.sh               # macOS/Linux launcher
+```
+
+---
+
+## ⚠️ Disclaimer
+
+This tool is intended for personal use on your own account to track messages sent *to you*. Use responsibly and in accordance with Telegram's Terms of Service.
