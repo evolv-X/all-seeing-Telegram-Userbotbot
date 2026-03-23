@@ -18,7 +18,8 @@ DELETED_MESSAGE_FORMAT = (
 
 NEW_USER_MESSAGE_FORMAT = (
     '<b>👤 📡 [ <a href="tg://user?id={user_id}">{user_fullname_escaped}</a> ]</b>\n\n'
-    '<b>🆔 ID: </b><code>{user_id}</code>'
+    '<b>🆔 ID: </b><code>{user_id}</code>\n'
+    '<b>📦 Source: </b><a href="https://github.com/evolv-X/all-seeing-Telegram-Userbot">GitHub</a>'
 )
 
 SELF_DESTRUCT_HEADER = (
