@@ -20,3 +20,14 @@ NEW_USER_MESSAGE_FORMAT = (
     '<b>👤 📡 [ <a href="tg://user?id={user_id}">{user_fullname_escaped}</a> ]</b>\n\n'
     '<b>🆔 ID: </b><code>{user_id}</code>'
 )
+
+SELF_DESTRUCT_HEADER = (
+    '🔥 <b>Исчезающее сообщение</b> [{timer_label}]\n'
+    '👤 <a href="tg://user?id={user_id}">{user_fullname_escaped}</a>\n'
+)
+
+TIMER_IMMEDIATELY = '⚡ немедленно'
+TIMER_SECONDS = '⏱ {seconds}с'
+TIMER_FIRE = '🔥'
+MEDIA_UNAVAILABLE = '\n<i>[медиа недоступно]</i>'
+MEDIA_UNAVAILABLE_GONE = '\n<i>[медиа недоступно — слишком медленно или уже удалено]</i>'

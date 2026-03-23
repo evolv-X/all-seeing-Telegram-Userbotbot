@@ -400,114 +400,6 @@ class TdlibUserbot:
             return str(user_id)
 
     # ─────────────────────────────────────────
-    # Gift functions (unchanged)
-    # ─────────────────────────────────────────
-
-    async def get_owned_gifts(self) -> list[dict[str, Any]]:
-        """Return list of received gifts that can be upgraded."""
-        if not self.client:
-            raise RuntimeError("TDLib userbot not started")
-
-        me = await self.client.api.get_me()
-        gifts = []
-        offset = ""
-        _gift_fn = None
-
-        for fn in ("getUserReceivedGifts", "getReceivedGifts", "getUserGifts"):
-            try:
-                test = await self._raw_request({
-                    "@type": fn,
-                    "owner_id": {"@type": "messageSenderUser", "user_id": me.id},
-                    "offset": "",
-                    "limit": 1,
-                })
-                if test.get("@type") != "error":
-                    logger.info("✅ Gift list function: %s", fn)
-                    _gift_fn = fn
-                    break
-                logger.warning("❌ %s -> error: code=%s msg=%s", fn, test.get("code"), test.get("message"))
-            except Exception as e:
-                logger.warning("❌ %s raised: %s", fn, e)
-        else:
-            logger.error("No working gift list function found in this TDLib build!")
-            return []
-
-        while True:
-            try:
-                result = await self._raw_request({
-                    "@type": _gift_fn,
-                    "owner_id": {"@type": "messageSenderUser", "user_id": me.id},
-                    "exclude_unsaved": False,
-                    "exclude_saved": False,
-                    "exclude_unlimited": False,
-                    "exclude_upgradable": False,
-                    "exclude_non_upgradable": True,
-                    "exclude_upgraded": True,
-                    "sort_by_price": False,
-                    "offset": offset,
-                    "limit": 100,
-                })
-            except Exception as e:
-                logger.error("%s failed: %s", _gift_fn, e)
-                break
-
-            items = result.get("gifts", [])
-            if not items:
-                break
-
-            for item in items:
-                if not item.get("can_be_upgraded", False):
-                    continue
-                sent_gift = item.get("gift", {})
-                inner_gift = sent_gift.get("gift", {})
-                stars = (
-                    item.get("prepaid_upgrade_star_count")
-                    or item.get("upgrade_star_count")
-                    or inner_gift.get("upgrade_star_count")
-                    or inner_gift.get("star_count")
-                    or 100
-                )
-                sticker = inner_gift.get("sticker", {})
-                emoji = sticker.get("emoji", "🎁")
-                gift_id_short = item.get("received_gift_id", "")
-                gifts.append({
-                    "received_gift_id": gift_id_short,
-                    "star_count": stars,
-                    "title": f"{emoji} Gift #{gift_id_short}",
-                })
-
-            next_offset = result.get("next_offset", "")
-            if not next_offset:
-                break
-            offset = next_offset
-
-        logger.info("Found %d upgradeable gifts via TDLib", len(gifts))
-        return gifts
-
-    async def upgrade_gift(
-        self,
-        received_gift_id: str,
-        star_count: int,
-        keep_original_details: bool = False,
-    ) -> dict[str, Any]:
-        """Fire upgradeGift via raw TDLib."""
-        if not self.client:
-            raise RuntimeError("TDLib userbot not started")
-
-        t0 = time.monotonic()
-        logger.info("🚀 TDLib upgradeGift SEND | received_gift_id=%s stars=%d", received_gift_id, star_count)
-        result = await self._raw_request({
-            "@type": "upgradeGift",
-            "business_connection_id": "",
-            "received_gift_id": received_gift_id,
-            "keep_original_details": keep_original_details,
-            "star_count": star_count,
-        })
-        elapsed_ms = (time.monotonic() - t0) * 1000
-        logger.info("✅ TDLib upgradeGift DONE | received_gift_id=%s | elapsed=%.1fms", received_gift_id, elapsed_ms)
-        return result
-
-    # ─────────────────────────────────────────
     # Message tracking handlers
     # ─────────────────────────────────────────
 
@@ -519,6 +411,12 @@ class TdlibUserbot:
         edited_fmt: str,
         deleted_fmt: str,
         new_user_fmt: str,
+        self_destruct_fmt: str,
+        timer_immediately: str,
+        timer_seconds: str,
+        timer_fire: str,
+        media_unavailable: str,
+        media_unavailable_gone: str,
         messagesx_cls,
         usersdb_cls,
         watched_chat_ids: Set[int] | None = None,
@@ -592,7 +490,7 @@ class TdlibUserbot:
                                 await method(notify_user_id, input_file, caption=caption, parse_mode="html")
                             return
                     # Fall through to text if download failed
-                    caption += "\n<i>[media unavailable]</i>"
+                    caption += media_unavailable
 
                 await aiogram_bot.send_message(notify_user_id, caption, parse_mode="html")
 
@@ -617,15 +515,16 @@ class TdlibUserbot:
             timer_s = sdt.get("self_destruct_time", 0) if isinstance(sdt, dict) else 0
 
             if sdt_type == "messageSelfDestructTypeImmediately":
-                timer_label = "⚡ immediately"
+                timer_label = timer_immediately
             elif timer_s:
-                timer_label = f"⏱ {timer_s}s"
+                timer_label = timer_seconds.format(seconds=timer_s)
             else:
-                timer_label = "🔥"
+                timer_label = timer_fire
 
-            header = (
-                f"🔥 <b>Self-destructing message</b> [{timer_label}]\n"
-                f"👤 <a href='tg://user?id={user_id}'>{escape(user_fullname)}</a>\n"
+            header = self_destruct_fmt.format(
+                timer_label=timer_label,
+                user_id=user_id,
+                user_fullname_escaped=escape(user_fullname),
             )
             if text:
                 header += f"\n{escape(text)}"
@@ -653,7 +552,7 @@ class TdlibUserbot:
                             else:
                                 await method(notify_user_id, input_file, caption=header, parse_mode="html")
                             return
-                    header += "\n<i>[media unavailable — too slow or already gone]</i>"
+                    header += media_unavailable_gone
 
                 await aiogram_bot.send_message(notify_user_id, header, parse_mode="html")
 

@@ -36,6 +36,12 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 EDITED_MESSAGE_FORMAT = language_module.EDITED_MESSAGE_FORMAT
 DELETED_MESSAGE_FORMAT = language_module.DELETED_MESSAGE_FORMAT
 NEW_USER_MESSAGE_FORMAT = language_module.NEW_USER_MESSAGE_FORMAT
+SELF_DESTRUCT_HEADER = language_module.SELF_DESTRUCT_HEADER
+TIMER_IMMEDIATELY = language_module.TIMER_IMMEDIATELY
+TIMER_SECONDS = language_module.TIMER_SECONDS
+TIMER_FIRE = language_module.TIMER_FIRE
+MEDIA_UNAVAILABLE = language_module.MEDIA_UNAVAILABLE
+MEDIA_UNAVAILABLE_GONE = language_module.MEDIA_UNAVAILABLE_GONE
 
 
 def dict_factory(cursor, row) -> dict:
@@ -205,6 +211,12 @@ async def main() -> None:
         edited_fmt=EDITED_MESSAGE_FORMAT,
         deleted_fmt=DELETED_MESSAGE_FORMAT,
         new_user_fmt=NEW_USER_MESSAGE_FORMAT,
+        self_destruct_fmt=SELF_DESTRUCT_HEADER,
+        timer_immediately=TIMER_IMMEDIATELY,
+        timer_seconds=TIMER_SECONDS,
+        timer_fire=TIMER_FIRE,
+        media_unavailable=MEDIA_UNAVAILABLE,
+        media_unavailable_gone=MEDIA_UNAVAILABLE_GONE,
         messagesx_cls=Messagesx,
         usersdb_cls=UsersDB,
     )
