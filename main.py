@@ -36,6 +36,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 EDITED_MESSAGE_FORMAT = language_module.EDITED_MESSAGE_FORMAT
 DELETED_MESSAGE_FORMAT = language_module.DELETED_MESSAGE_FORMAT
 NEW_USER_MESSAGE_FORMAT = language_module.NEW_USER_MESSAGE_FORMAT
+START_MESSAGE_FORMAT = language_module.START_MESSAGE_FORMAT
 SELF_DESTRUCT_HEADER = language_module.SELF_DESTRUCT_HEADER
 TIMER_IMMEDIATELY = language_module.TIMER_IMMEDIATELY
 TIMER_SECONDS = language_module.TIMER_SECONDS
@@ -178,7 +179,7 @@ async def cleanup_old_messages():
 async def start_command(message: types.Message):
     user_id = message.from_user.id
     user_fullname_escaped = escape(message.from_user.full_name)
-    msg = NEW_USER_MESSAGE_FORMAT.format(user_fullname_escaped=user_fullname_escaped, user_id=user_id)
+    msg = START_MESSAGE_FORMAT.format(user_fullname_escaped=user_fullname_escaped, user_id=user_id)
     await message.answer(msg, parse_mode='html')
 
 

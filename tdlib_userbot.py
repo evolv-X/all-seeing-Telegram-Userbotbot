@@ -399,6 +399,28 @@ class TdlibUserbot:
             logger.debug("_get_user_fullname(%d) failed: %s", user_id, e)
             return str(user_id)
 
+    async def _is_bot_user(self, user_id: int) -> bool:
+        """
+        Return True if user_id belongs to a bot (userTypeBot).
+        Returns False on any error (fail-open: don't skip if uncertain).
+        """
+        try:
+            result = await self._raw_request(
+                {"@type": "getUser", "user_id": user_id},
+                timeout=10.0,
+            )
+            if result.get("@type") == "error":
+                return False
+            user_type = result.get("type") or {}
+            utype = (
+                user_type.get("@type") if isinstance(user_type, dict)
+                else getattr(user_type, "@type", None) or getattr(user_type, "ID", None)
+            )
+            return utype == "userTypeBot"
+        except Exception as e:
+            logger.debug("_is_bot_user(%d) failed: %s", user_id, e)
+            return False
+
     # ─────────────────────────────────────────
     # Message tracking handlers
     # ─────────────────────────────────────────
@@ -597,6 +619,11 @@ class TdlibUserbot:
                     sender.get("user_id") if isinstance(sender, dict) else
                     getattr(sender, "user_id", None)
                 ) or chat_id
+
+                # Skip messages from bots
+                if await self._is_bot_user(author_id):
+                    logger.debug("Skipping message from bot user_id=%d", author_id)
+                    return
 
                 # Register new user if needed
                 user_in_db = usersdb_cls.get(user_id=author_id)
