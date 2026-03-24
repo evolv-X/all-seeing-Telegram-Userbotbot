@@ -323,7 +323,41 @@ class TdlibUserbot:
 
         client._auth_get_code = MethodType(_patched_auth_get_code, client)
         client._auth_get_password = MethodType(_patched_auth_get_password, client)
-        logger.debug("Auth input patched for reliable TTY reading")
+
+        # ── Patch auth state handler to log every state and handle QR flow ──
+        _orig_on_auth_state = client._on_authorization_state_update
+
+        async def _patched_on_auth_state(self_, authorization_state) -> None:  # noqa: N807
+            import sys
+            state_id = getattr(authorization_state, "ID", type(authorization_state).__name__)
+            logger.info("TDLib auth state: %s", state_id)
+
+            # TDLib 1.8+ may default to QR login; aiotdlib has no handler for it
+            # → it silently hangs forever and Telegram never sends SMS/app code
+            if state_id == "authorizationStateWaitOtherDeviceConfirmation":
+                link = getattr(authorization_state, "link", "")
+                sys.stdout.write(
+                    "\n"
+                    "⚠️  TDLib is requesting QR-code login.\n"
+                    "    Telegram did NOT send an SMS — it wants you to scan a QR code\n"
+                    "    in another Telegram session (phone/desktop).\n"
+                )
+                if link:
+                    sys.stdout.write(f"    Link: {link}\n")
+                sys.stdout.write(
+                    "\n"
+                    "    If you want SMS instead, delete the TDLib session directory\n"
+                    "    (.aiotdlib/) and restart.  On first run without a cached session\n"
+                    "    Telegram sends the code to the Telegram app, not SMS.\n"
+                    "\n"
+                )
+                sys.stdout.flush()
+                return  # don't call original — it has no handler and would hang
+
+            await _orig_on_auth_state(authorization_state)
+
+        client._on_authorization_state_update = MethodType(_patched_on_auth_state, client)
+        logger.debug("Auth input + state handler patched for reliable TTY reading")
 
     async def start(self) -> None:
         """Start TDLib client (triggers auth on first run)."""
